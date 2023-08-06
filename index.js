@@ -4,7 +4,7 @@ const app = express();
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
-const { addonBuilder } = require("stremio-addon-sdk");
+const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 
 const type_ = {
   MOVIE: "movie",
@@ -23,7 +23,8 @@ const toStream = (parsed, tor, type, s, e) => {
         (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
           element["name"]?.toLowerCase()?.includes(`.mp4`) ||
           element["name"]?.toLowerCase()?.includes(`.avi`) ||
-          element["name"]?.toLowerCase()?.includes(`.flv`))
+          element["name"]?.toLowerCase()?.includes(`.flv`)
+        )
       );
     });
 
@@ -127,66 +128,42 @@ const getMeta = async (id, type) => {
   }
 };
 
-app.use(cors()); // Enable CORS for all routes
-
-// Create the addon instance
-const builder = new addonBuilder({
-  id: "mikmc.od.org+++", // Your addon's ID
-  version: "3.0.0",
-  name: "Hackett",
-  description: "Torrent results from Jackett Indexers",
-  icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
-  resources: ["stream"],
-  types: ["movie", "series"],
-  idPrefixes: ["tt"],
-  catalogs: [],
-});
-
-// Implement the catalog handler (if needed)
-builder.defineCatalogHandler(({ type, id }) => {
-  // Implement your catalog logic here
-  // Return the catalogs in the expected format
-});
-
-// Implement the stream handler
-builder.defineStreamHandler(async ({ type, id }) => {
-  const media = type;
-  id = id.replace(".json", "");
-  const [tt, s, e] = id.split(":");
+// Stremio Addon SDK: Manifest and Catalog Handler
+const builder = new addonBuilder(manifest);
+builder.defineCatalogHandler(async function (args) {
+  const { type, id } = args;
+  let [tt, s, e] = id.split(":");
   let query = "";
   let meta;
 
   try {
-    meta = await getMeta(id, media);
+    meta = await getMeta(id, type);
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
-    // Handle error and return response
-    return Promise.reject(new Error("Error fetching meta data."));
   }
 
   query = meta?.name;
 
-  if (media === type_.MOVIE) {
+  if (type === type_.MOVIE) {
     query += " " + meta?.year;
-  } else if (media === type_.TV) {
+  } else if (type === type_.TV) {
     query += " S" + (s ?? "1").padStart(2, "0");
   }
   query = encodeURIComponent(query);
 
   let result = await fetchTorrent(hosts, apiKey, query);
-  result = result.slice(0, 10); // Limit results to 10
+  result = result.slice(0, 10); // Limit the results to 10 with newest first
 
   let stream_results = await Promise.all(
-    result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
+    result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], type, s, e))
   );
 
-  return Promise.resolve({ streams: stream_results });
+  return { metas: stream_results };
 });
 
-// Generate the addon and start the server
+const PORT = process.env.PORT || 3000;
 const addonInterface = builder.getInterface();
 app.use(addonInterface.middleware());
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("The server is working on " + PORT);
 });
