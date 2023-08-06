@@ -1,4 +1,5 @@
-const { addonBuilder, getInterface } = require("stremio-addon-sdk");
+const { addonBuilder, ServeHTTP } = require("stremio-addon-sdk");
+const express = require("express");
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
@@ -124,7 +125,7 @@ const getMeta = async (id, type) => {
   }
 };
 
-const builder = new addonBuilder({
+const addon = new addonBuilder({
   id: "org.example.jackettaddon",
   version: "1.0.0",
   name: "Jackett Addon",
@@ -138,7 +139,7 @@ const builder = new addonBuilder({
   endpoint: "http://localhost:3000", // Replace with the public URL of your server
 });
 
-builder.defineStreamHandler(async (args) => {
+addon.defineStreamHandler(async (args) => {
   const { id } = args;
   const [tt, s, e] = id.split(":");
   const type = tt === "tt" ? type_.MOVIE : type_.TV;
@@ -167,13 +168,11 @@ builder.defineStreamHandler(async (args) => {
   return { streams: [stream] };
 });
 
-const addonInterface = getInterface(builder);
-
 const app = express();
 app.use(cors());
-app.use(addonInterface.middleware());
 
 const port = process.env.PORT || 3000;
+app.use(ServeHTTP(addon.getInterface()));
 app.listen(port, () => {
   console.log(`Addon server listening on port ${port}`);
 });
