@@ -101,8 +101,8 @@ const streamFromMagnet = (tor, uri, type, s, e) => {
 let stream_results = [];
 let torrent_results = [];
 
-let host = "http://100.40.225.234:9117";
-let apiKey = "fql6lmpnr2xnw2om8s7arfcmkpd2jinw";
+let host = "http://176.187.79.66:9117";
+let apiKey = "4sp5tkut05nrjsasgqfn8itc32cte8vw";
 
 let fetchTorrent = async (query) => {
   let url = `${host}/api/v2.0/indexers/all/results?apikey=${apiKey}&Query=${query}&_=1691241987837`;
