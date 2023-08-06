@@ -56,6 +56,27 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
+const getMeta = async (id, type) => {
+  const [tt, s, e] = id.split(":");
+  const queryUrl = `https://v2.sg.media-imdb.com/suggestion/t/${tt}.json`;
+
+  try {
+    const response = await axios.get(queryUrl);
+    const suggestions = response.data?.d || [];
+
+    const meta = suggestions.find((item) => item.id === id);
+    if (!meta) {
+      throw new Error("Meta data not found for the given ID.");
+    }
+
+    return { name: meta.l, year: meta.y };
+  } catch (error) {
+    console.error("Error fetching meta data:", error.message);
+    // Fallback to an empty object if meta data is not available
+    return {};
+  }
+};
+
 let hosts = [
   "http://138.2.245.235:9117",
   // Add more host URLs as needed
@@ -124,9 +145,9 @@ app.get("/stream/:type/:id", async (req, res) => {
   let [tt, s, e] = id.split(":");
   let query = "";
   let meta;
-  
+
   try {
-    meta = await getMeta(tt, media);
+    meta = await getMeta(id, media);
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
   }
