@@ -1,4 +1,4 @@
-const { addonBuilder, ServeHTTP } = require("stremio-addon-sdk");
+const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const express = require("express");
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
@@ -172,7 +172,7 @@ const app = express();
 app.use(cors());
 
 const port = process.env.PORT || 3000;
-app.use(ServeHTTP(addon.getInterface()));
+app.use(serveHTTP(addon.getInterface()));
 app.listen(port, () => {
   console.log(`Addon server listening on port ${port}`);
 });
