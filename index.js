@@ -4,7 +4,7 @@ const app = express();
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const { addonBuilder, getInterface } = require("stremio-addon-sdk");
 
 const type_ = {
   MOVIE: "movie",
@@ -23,8 +23,7 @@ const toStream = (parsed, tor, type, s, e) => {
         (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
           element["name"]?.toLowerCase()?.includes(`.mp4`) ||
           element["name"]?.toLowerCase()?.includes(`.avi`) ||
-          element["name"]?.toLowerCase()?.includes(`.flv`)
-        )
+          element["name"]?.toLowerCase()?.includes(`.flv`))
       );
     });
 
@@ -128,42 +127,60 @@ const getMeta = async (id, type) => {
   }
 };
 
-// Stremio Addon SDK: Manifest and Catalog Handler
-const builder = new addonBuilder(manifest);
-builder.defineCatalogHandler(async function (args) {
-  const { type, id } = args;
+app.use(cors()); // Enable CORS for all routes
+
+app.get("/manifest.json", (req, res) => {
+  const manifest = {
+    id: "stremio-hyackett-addon",
+    version: "1.0.0",
+    name: "Hackett",
+    description: "Stremio addon for Jackett",
+    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
+    resources: ["stream"],
+    types: ["movie", "series"],
+    idPrefixes: ["tt"],
+    catalogs: [],
+  };
+  res.setHeader("Content-Type", "application/json");
+  return res.send(manifest);
+});
+
+app.get("/stream/:type/:id", async (req, res) => {
+  const media = req.params.type;
+  let id = req.params.id.replace(".json", "");
   let [tt, s, e] = id.split(":");
   let query = "";
   let meta;
 
   try {
-    meta = await getMeta(id, type);
+    meta = await getMeta(id, media);
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
   }
 
   query = meta?.name;
 
-  if (type === type_.MOVIE) {
+  if (media === type_.MOVIE) {
     query += " " + meta?.year;
-  } else if (type === type_.TV) {
+  } else if (media === type_.TV) {
     query += " S" + (s ?? "1").padStart(2, "0");
   }
   query = encodeURIComponent(query);
 
   let result = await fetchTorrent(hosts, apiKey, query);
-  result = result.slice(0, 10); // Limit the results to 10 with newest first
 
   let stream_results = await Promise.all(
-    result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], type, s, e))
+    result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
   );
 
-  return { metas: stream_results };
+  res.setHeader("Content-Type", "application/json");
+  return res.send({ streams: stream_results });
 });
 
 const PORT = process.env.PORT || 3000;
-const addonInterface = builder.getInterface();
-app.use(addonInterface.middleware());
 app.listen(PORT, () => {
   console.log("The server is working on " + PORT);
 });
+
+// Export the app for Stremio Addon SDK
+module.exports = getInterface(app);
