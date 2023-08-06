@@ -56,15 +56,33 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
-let host = "http://82.123.61.186:9117";
-let apiKey = "h3cotr040alw3lqbuhjgrorcal76bv17";
+let hosts = [
+  "http://138.2.245.235:9117",
+  // Add more host URLs as needed
+];
 
-let fetchTorrent = async (query) => {
+let apiKey = "fmzr5bcoqy1pnocjy3ixbno7i0j8e3ik";
+
+let fetchTorrent = async (hosts, query) => {
   try {
-    const url = `${host}/api/v2.0/indexers/test:passed/results?apikey=${apiKey}&Query=${query}&Category%5B%5D=2000&Category%5B%5D=5000&Tracker%5B%5D=abnormal&Tracker%5B%5D=beyond-hd-api&Tracker%5B%5D=blutopia-api&Tracker%5B%5D=morethantv-api&Tracker%5B%5D=uhdbits&_=1690837706300`;
-    const { data } = await axios.get(url);
-    if (data["Results"].length !== 0) {
-      return data["Results"].map((result) => ({
+    const results = await Promise.all(
+      hosts.map(async (host) => {
+        const url = `${host}/api/v2.0/indexers/test:passed/results?apikey=${apiKey}&Query=${query}&Category%5B%5D=2000&Category%5B%5D=5000&Tracker%5B%5D=abnormal&Tracker%5B%5D=beyond-hd-api&Tracker%5B%5D=blutopia-api&Tracker%5B%5D=morethantv-api&Tracker%5B%5D=uhdbits&_=1690837706300`;
+        try {
+          const response = await axios.get(url);
+          return response.data["Results"];
+        } catch (error) {
+          console.error(`Error fetching results from ${host}:`, error.message);
+          return [];
+        }
+      })
+    );
+
+    // Flatten the results from different hosts into a single array
+    const allResults = results.flat();
+
+    if (allResults.length !== 0) {
+      return allResults.map((result) => ({
         Tracker: result["Tracker"],
         Category: result["CategoryDesc"],
         Title: result["Title"],
@@ -80,19 +98,6 @@ let fetchTorrent = async (query) => {
     return [];
   }
 };
-
-function getMeta(id, type) {
-  var [tt, s, e] = id.split(":");
-  return axios
-    .get(`https://v2.sg.media-imdb.com/suggestion/t/${tt}.json`)
-    .then(({ data }) => data.d[0])
-    .then(({ l, y }) => ({ name: l, year: y }))
-    .catch((err) =>
-      axios
-        .get(`https://v3-cinemeta.strem.io/meta/${type}/${tt}.json`)
-        .then(({ data }) => data.meta)
-    );
-}
 
 app.use(cors()); // Enable CORS for all routes
 
@@ -135,7 +140,7 @@ app.get("/stream/:type/:id", async (req, res) => {
   }
   query = encodeURIComponent(query);
 
-  let result = await fetchTorrent(query);
+  let result = await fetchTorrent(hosts, query);
 
   let stream_results = await Promise.all(
     result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
