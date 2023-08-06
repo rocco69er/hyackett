@@ -67,8 +67,8 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
-let hosts = ["http://104.254.43.51:9117"]; // Replace host:port with your actual Jackett API endpoint
-let apiKey = "sttm651zbu0s3mabuwjhary5aax4gke4"; // Replace with your Jackett API key
+let hosts = ["http://104.254.43.51:9117"];
+let apiKey = "sttm651zbu0s3mabuwjhary5aax4gke4";
 
 let fetchTorrent = async (hosts, apiKey, query) => {
   try {
@@ -127,7 +127,7 @@ const getMeta = async (id, type) => {
   }
 };
 
-app.use(cors()); // Enable CORS for all routes
+app.use(cors());
 
 app.get("/manifest.json", (req, res) => {
   const manifest = {
@@ -178,9 +178,19 @@ app.get("/stream/:type/:id", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// Create an addon using the Stremio Addon SDK
+const builder = new addonBuilder(manifest);
+builder.defineStreamHandler(async ({ type, id }) => {
+  // Implement the stream handler logic here
+});
+
+const addonInterface = builder.getInterface();
+
+// Start the server
 app.listen(PORT, () => {
   console.log("The server is working on " + PORT);
 });
 
-// Export the app for Stremio Addon SDK
-module.exports = getInterface(app);
+// Export the addon interface for Stremio Addon SDK
+module.exports = addonInterface;
