@@ -47,18 +47,14 @@ const toStream = (parsed, tor, type, s, e) => {
 
 const streamFromMagnet = (tor, uri, type, s, e) => {
   return new Promise((resolve, reject) => {
-    if (uri.startsWith("magnet:?")) {
+    if (uri && uri.startsWith("magnet:?")) { // Add a check for uri to avoid errors
       resolve(toStream(parseTorrent(uri), tor, type, s, e));
+    } else {
+      resolve(false); // Handle the case when uri is null or not starting with "magnet:?"
     }
-    parseTorrent.remote(uri, (err, parsed) => {
-      if (!err) {
-        resolve(toStream(parsed, tor, type, s, e));
-      } else {
-        resolve(false);
-      }
-    });
   });
 };
+
 
 let stream_results = [];
 let torrent_results = [];
