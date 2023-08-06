@@ -56,39 +56,14 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
-const getMeta = async (id, type) => {
-  const [tt, s, e] = id.split(":");
-  const queryUrl = `https://v2.sg.media-imdb.com/suggestion/t/${tt}.json`;
+let hosts = ["http://100.40.225.234:9117"]; // Replace host:port with your actual Jackett API endpoint
+let apiKey = "fql6lmpnr2xnw2om8s7arfcmkpd2jinw"; // Replace with your Jackett API key
 
-  try {
-    const response = await axios.get(queryUrl);
-    const suggestions = response.data?.d || [];
-
-    const meta = suggestions.find((item) => item.id === id);
-    if (!meta) {
-      throw new Error("Meta data not found for the given ID.");
-    }
-
-    return { name: meta.l, year: meta.y };
-  } catch (error) {
-    console.error("Error fetching meta data:", error.message);
-    // Fallback to an empty object if meta data is not available
-    return {};
-  }
-};
-
-let hosts = [
-  "http://138.2.245.235:9117",
-  // Add more host URLs as needed
-];
-
-let apiKey = "fmzr5bcoqy1pnocjy3ixbno7i0j8e3ik";
-
-let fetchTorrent = async (hosts, query) => {
+let fetchTorrent = async (hosts, apiKey, query) => {
   try {
     const results = await Promise.all(
       hosts.map(async (host) => {
-        const url = `${host}/api/v2.0/indexers/test:passed/results?apikey=${apiKey}&Query=${query}&Category%5B%5D=2000&Category%5B%5D=5000&Tracker%5B%5D=abnormal&Tracker%5B%5D=beyond-hd-api&Tracker%5B%5D=blutopia-api&Tracker%5B%5D=morethantv-api&Tracker%5B%5D=uhdbits&_=1690837706300`;
+        const url = `${host}/api/v2.0/indexers/all/results?apikey=${apiKey}&Query=${query}&_=${Date.now()}`;
         try {
           const response = await axios.get(url);
           return response.data["Results"];
@@ -117,6 +92,27 @@ let fetchTorrent = async (hosts, query) => {
   } catch (error) {
     console.error("Error fetching torrent results:", error.message);
     return [];
+  }
+};
+
+const getMeta = async (id, type) => {
+  const [tt, s, e] = id.split(":");
+  const queryUrl = `https://v2.sg.media-imdb.com/suggestion/t/${tt}.json`;
+
+  try {
+    const response = await axios.get(queryUrl);
+    const suggestions = response.data?.d || [];
+
+    const meta = suggestions.find((item) => item.id === id);
+    if (!meta) {
+      throw new Error("Meta data not found for the given ID.");
+    }
+
+    return { name: meta.l, year: meta.y };
+  } catch (error) {
+    console.error("Error fetching meta data:", error.message);
+    // Fallback to an empty object if meta data is not available
+    return {};
   }
 };
 
@@ -161,7 +157,7 @@ app.get("/stream/:type/:id", async (req, res) => {
   }
   query = encodeURIComponent(query);
 
-  let result = await fetchTorrent(hosts, query);
+  let result = await fetchTorrent(hosts, apiKey, query);
 
   let stream_results = await Promise.all(
     result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
