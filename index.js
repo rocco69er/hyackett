@@ -3,6 +3,9 @@ const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
 
+const app = express();
+app.use(cors()); // Enable CORS for all routes
+
 const type_ = {
   MOVIE: "movie",
   TV: "series",
@@ -123,9 +126,6 @@ const getMeta = async (id, type) => {
     return {};
   }
 };
-
-const app = express();
-app.use(cors()); // Enable CORS for all routes
 
 app.get("/stream/:id.json", async (req, res) => {
   const { id } = req.params;
