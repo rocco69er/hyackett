@@ -1,4 +1,3 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const express = require("express");
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
@@ -126,7 +125,7 @@ const getMeta = async (id, type) => {
 };
 
 const app = express();
-app.use(cors());
+app.use(cors()); // Enable CORS for all routes
 
 app.get("/stream/:id.json", async (req, res) => {
   const { id } = req.params;
@@ -159,25 +158,6 @@ app.get("/stream/:id.json", async (req, res) => {
 
   res.json(stream);
 });
-
-const manifest = {
-  id: "org.example.jackettaddon",
-  version: "1.0.0",
-  name: "Jackett Addon",
-  description: "Stremio addon for Jackett",
-  resources: ["stream"],
-  types: ["movie", "series"],
-  catalogs: [],
-  idPrefixes: ["tt", "e"],
-  logo: "https://path.to/your/logo.png", // Replace with the URL of your addon logo
-  background: "https://path.to/your/background.png", // Replace with the URL of your addon background image
-  endpoint: "http://localhost:3000", // Replace with the public URL of your server
-};
-
-const builder = new addonBuilder(manifest);
-const addonInterface = builder.getInterface();
-
-app.use(addonInterface.middleware());
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
