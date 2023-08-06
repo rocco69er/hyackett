@@ -1,10 +1,8 @@
-require("dotenv").config();
+const { addonBuilder, getInterface } = require("stremio-addon-sdk");
 const express = require("express");
-const app = express();
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
-const { addonBuilder, getInterface } = require("stremio-addon-sdk");
 
 const type_ = {
   MOVIE: "movie",
@@ -23,7 +21,8 @@ const toStream = (parsed, tor, type, s, e) => {
         (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
           element["name"]?.toLowerCase()?.includes(`.mp4`) ||
           element["name"]?.toLowerCase()?.includes(`.avi`) ||
-          element["name"]?.toLowerCase()?.includes(`.flv`))
+          element["name"]?.toLowerCase()?.includes(`.flv`)
+        )
       );
     });
 
@@ -67,8 +66,8 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
-let hosts = ["http://104.254.43.51:9117"];
-let apiKey = "sttm651zbu0s3mabuwjhary5aax4gke4";
+let hosts = ["http://104.254.43.51:9117"]; // Replace host:port with your actual Jackett API endpoint
+let apiKey = "sttm651zbu0s3mabuwjhary5aax4gke4"; // Replace with your Jackett API key
 
 let fetchTorrent = async (hosts, apiKey, query) => {
   try {
@@ -85,6 +84,7 @@ let fetchTorrent = async (hosts, apiKey, query) => {
       })
     );
 
+    // Flatten the results from different hosts into a single array
     const allResults = results.flat();
 
     if (allResults.length !== 0) {
@@ -121,19 +121,22 @@ const getMeta = async (id, type) => {
     return { name: meta.l, year: meta.y };
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
+    // Fallback to an empty object if meta data is not available
     return {};
   }
 };
 
-app.use(cors());
+const app = express();
+app.use(cors()); // Enable CORS for all routes
 
 app.get("/manifest.json", (req, res) => {
   const manifest = {
-    id: "stremio-hyackett-addon",
-    version: "1.0.0",
+    id: "mikmc.od.org+++",
+    version: "3.0.0",
     name: "Hackett",
-    description: "Stremio addon for Jackett",
-    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
+    description: "Torrent results from Jackett Indexers",
+    icon:
+      "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
     resources: ["stream"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
@@ -171,4 +174,11 @@ app.get("/stream/:type/:id", async (req, res) => {
     result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
   );
 
-  res.setHeader
+  res.setHeader("Content-Type", "application/json");
+  return res.send({ streams: stream_results });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("The server is working on " + PORT);
+});
