@@ -1,4 +1,4 @@
-const { addonBuilder, getInterface } = require("stremio-addon-sdk");
+const { addonBuilder } = require("stremio-addon-sdk");
 const express = require("express");
 const app = express();
 const axios = require("axios");
@@ -11,29 +11,29 @@ const type_ = {
 };
 
 const toStream = (parsed, tor, type, s, e) => {
-  const infoHash = parsed.infoHash?.toLowerCase() || "";
+  const infoHash = parsed.infoHash.toLowerCase();
   let title = tor.extraTag || parsed.name;
   let index = -1;
   if (type === type_.TV) {
     index = (parsed.files ?? []).findIndex((element, index) => {
       return (
-        element.name?.toLowerCase()?.includes(`s0${s}`) &&
-        element.name?.toLowerCase()?.includes(`e0${e}`) &&
-        (element.name?.toLowerCase()?.includes(".mkv") ||
-          element.name?.toLowerCase()?.includes(".mp4") ||
-          element.name?.toLowerCase()?.includes(".avi") ||
-          element.name?.toLowerCase()?.includes(".flv"))
+        element["name"]?.toLowerCase()?.includes(`s0${s}`) &&
+        element["name"]?.toLowerCase()?.includes(`e0${e}`) &&
+        (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
+          element["name"]?.toLowerCase()?.includes(`.mp4`) ||
+          element["name"]?.toLowerCase()?.includes(`.avi`) ||
+          element["name"]?.toLowerCase()?.includes(`.flv`))
       );
     });
 
-    title += index == -1 ? "" : `\n${parsed.files[index].name}`;
+    title += index == -1 ? "" : `\n${parsed.files[index]["name"]}`;
   }
 
-  const subtitle = "Seeds: " + (tor["Seeders"] || 0) + " / Peers: " + (tor["Peers"] || 0);
+  const subtitle = "Seeds: " + tor["Seeders"] + " / Peers: " + tor["Peers"];
   title += (title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n") + subtitle;
 
   return {
-    name: tor["Tracker"] || "",
+    name: tor["Tracker"],
     type: type,
     infoHash: infoHash,
     fileIdx: index == -1 ? 1 : index,
@@ -50,11 +50,7 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
 
   if (uri.startsWith("magnet:?")) {
     try {
-      const parsedTorrent = parseTorrent(uri);
-      if (!parsedTorrent) {
-        throw new Error("Invalid magnet URI");
-      }
-      return toStream(parsedTorrent, tor, type, s, e);
+      return toStream(parseTorrent(uri), tor, type, s, e);
     } catch (error) {
       console.error("Invalid magnet URI:", error.message);
       return false;
@@ -63,11 +59,7 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
 
   try {
     const { data } = await axios.get(uri);
-    const parsedTorrent = parseTorrent(data);
-    if (!parsedTorrent) {
-      throw new Error("Invalid torrent data");
-    }
-    return toStream(parsedTorrent, tor, type, s, e);
+    return toStream(parseTorrent(data), tor, type, s, e);
   } catch (error) {
     console.error("Error fetching torrent data:", error.message);
     return false;
@@ -97,12 +89,12 @@ let fetchTorrent = async (hosts, apiKey, query) => {
 
     if (allResults.length !== 0) {
       return allResults.map((result) => ({
-        Tracker: result["Tracker"] || "",
-        Category: result["CategoryDesc"] || "",
-        Title: result["Title"] || "",
-        Seeders: result["Seeders"] || 0,
-        Peers: result["Peers"] || 0,
-        Link: result["Link"] || "",
+        Tracker: result["Tracker"],
+        Category: result["CategoryDesc"],
+        Title: result["Title"],
+        Seeders: result["Seeders"],
+        Peers: result["Peers"],
+        Link: result["Link"],
       }));
     } else {
       return [];
@@ -126,7 +118,7 @@ const getMeta = async (id, type) => {
       throw new Error("Meta data not found for the given ID.");
     }
 
-    return { name: meta.l || "", year: meta.y || "" };
+    return { name: meta.l, year: meta.y };
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
     // Fallback to an empty object if meta data is not available
@@ -183,9 +175,9 @@ const manifest = {
 };
 
 const builder = new addonBuilder(manifest);
-const addonInterface = getInterface(builder);
 
-app.use(addonInterface.middleware());
+// We'll directly use the addonBuilder object to handle the middleware
+app.use(builder.getInterface().middleware());
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
