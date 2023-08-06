@@ -43,6 +43,11 @@ const toStream = (parsed, tor, type, s, e) => {
 };
 
 const streamFromMagnet = async (tor, uri, type, s, e) => {
+  if (!uri) {
+    console.error("Invalid magnet URI.");
+    return false;
+  }
+
   if (uri.startsWith("magnet:?")) {
     return toStream(parseTorrent(uri), tor, type, s, e);
   }
