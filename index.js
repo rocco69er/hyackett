@@ -4,6 +4,7 @@ const app = express();
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
+const { addonBuilder } = require("stremio-addon-sdk");
 
 const type_ = {
   MOVIE: "movie",
@@ -22,8 +23,7 @@ const toStream = (parsed, tor, type, s, e) => {
         (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
           element["name"]?.toLowerCase()?.includes(`.mp4`) ||
           element["name"]?.toLowerCase()?.includes(`.avi`) ||
-          element["name"]?.toLowerCase()?.includes(`.flv`)
-        )
+          element["name"]?.toLowerCase()?.includes(`.flv`))
       );
     });
 
@@ -31,7 +31,7 @@ const toStream = (parsed, tor, type, s, e) => {
   }
 
   const subtitle = "Seeds: " + tor["Seeders"] + " / Peers: " + tor["Peers"];
-  title += title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n" + subtitle;
+  title += (title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n") + subtitle;
 
   return {
     name: tor["Tracker"],
@@ -40,7 +40,6 @@ const toStream = (parsed, tor, type, s, e) => {
     fileIdx: index == -1 ? 1 : index,
     sources: (parsed.announce || []).map((x) => "tracker:" + x).concat(["dht:" + infoHash]),
     title: title,
-    timestamp: tor.timestamp, // Assuming there's a property "timestamp" in the torrent object
   };
 };
 
@@ -97,7 +96,6 @@ let fetchTorrent = async (hosts, apiKey, query) => {
         Seeders: result["Seeders"],
         Peers: result["Peers"],
         Link: result["Link"],
-        timestamp: result.timestamp, // Assuming there's a property "timestamp" in the result object
       }));
     } else {
       return [];
@@ -131,26 +129,30 @@ const getMeta = async (id, type) => {
 
 app.use(cors()); // Enable CORS for all routes
 
-app.get("/manifest.json", (req, res) => {
-  const json = {
-    id: "mikmc.od.org+++",
-    version: "3.0.0",
-    name: "Hackett",
-    description: "Torrent results from Jackett Indexers",
-    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
-    resources: ["stream"],
-    types: ["movie", "series"],
-    idPrefixes: ["tt"],
-    catalogs: [],
-  };
-  res.setHeader("Content-Type", "application/json");
-  return res.send(json);
+// Create the addon instance
+const builder = new addonBuilder({
+  id: "mikmc.od.org+++", // Your addon's ID
+  version: "3.0.0",
+  name: "Hackett",
+  description: "Torrent results from Jackett Indexers",
+  icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
+  resources: ["stream"],
+  types: ["movie", "series"],
+  idPrefixes: ["tt"],
+  catalogs: [],
 });
 
-app.get("/stream/:type/:id", async (req, res) => {
-  const media = req.params.type;
-  let id = req.params.id.replace(".json", "");
-  let [tt, s, e] = id.split(":");
+// Implement the catalog handler (if needed)
+builder.defineCatalogHandler(({ type, id }) => {
+  // Implement your catalog logic here
+  // Return the catalogs in the expected format
+});
+
+// Implement the stream handler
+builder.defineStreamHandler(async ({ type, id }) => {
+  const media = type;
+  id = id.replace(".json", "");
+  const [tt, s, e] = id.split(":");
   let query = "";
   let meta;
 
@@ -158,7 +160,8 @@ app.get("/stream/:type/:id", async (req, res) => {
     meta = await getMeta(id, media);
   } catch (error) {
     console.error("Error fetching meta data:", error.message);
-    return res.status(500).json({ error: "Error fetching meta data." });
+    // Handle error and return response
+    return Promise.reject(new Error("Error fetching meta data."));
   }
 
   query = meta?.name;
@@ -171,26 +174,18 @@ app.get("/stream/:type/:id", async (req, res) => {
   query = encodeURIComponent(query);
 
   let result = await fetchTorrent(hosts, apiKey, query);
+  result = result.slice(0, 10); // Limit results to 10
 
   let stream_results = await Promise.all(
     result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
   );
 
-  // Filter out unsuccessful stream results and sort by date (newest first)
-  stream_results = stream_results.filter((stream) => stream !== false);
-  stream_results.sort((a, b) => b.timestamp - a.timestamp);
-
-  // Limit the number of results to 10
-  stream_results = stream_results.slice(0, 10);
-
-  if (stream_results.length === 0) {
-    return res.status(500).json({ error: "No torrent data found." });
-  }
-
-  res.setHeader("Content-Type", "application/json");
-  return res.json({ streams: stream_results });
+  return Promise.resolve({ streams: stream_results });
 });
 
+// Generate the addon and start the server
+const addonInterface = builder.getInterface();
+app.use(addonInterface.middleware());
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("The server is working on " + PORT);
