@@ -14,28 +14,28 @@ const toStream = (parsed, tor, type, s, e) => {
   let title = tor.extraTag || parsed.name;
   let index = -1;
   if (type === type_.TV) {
-    index = (parsed.files ?? []).findIndex((element) => {
+    index = (parsed.files ?? []).findIndex((element, index) => {
       return (
-        element.name?.toLowerCase().includes(`s0${s}`) &&
-        element.name?.toLowerCase().includes(`e0${e}`) &&
-        (element.name?.toLowerCase().includes(".mkv") ||
-          element.name?.toLowerCase().includes(".mp4") ||
-          element.name?.toLowerCase().includes(".avi") ||
-          element.name?.toLowerCase().includes(".flv"))
+        element["name"]?.toLowerCase()?.includes(`s0${s}`) &&
+        element["name"]?.toLowerCase()?.includes(`e0${e}`) &&
+        (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
+          element["name"]?.toLowerCase()?.includes(`.mp4`) ||
+          element["name"]?.toLowerCase()?.includes(`.avi`) ||
+          element["name"]?.toLowerCase()?.includes(`.flv`))
       );
     });
 
-    title += index === -1 ? "" : `\n${parsed.files[index].name}`;
+    title += index == -1 ? "" : `\n${parsed.files[index]["name"]}`;
   }
 
-  const subtitle = "Seeds: " + tor.Seeders + " / Peers: " + tor.Peers;
-  title += title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n" + subtitle;
+  const subtitle = "Seeds: " + tor["Seeders"] + " / Peers: " + tor["Peers"];
+  title += (title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n") + subtitle;
 
   return {
-    name: tor.Tracker,
+    name: tor["Tracker"],
     type: type,
     infoHash: infoHash,
-    fileIdx: index === -1 ? 1 : index,
+    fileIdx: index == -1 ? 1 : index,
     sources: (parsed.announce || []).map((x) => "tracker:" + x).concat(["dht:" + infoHash]),
     title: title,
   };
@@ -75,7 +75,7 @@ let fetchTorrent = async (hosts, apiKey, query) => {
         const url = `${host}/api/v2.0/indexers/all/results?apikey=${apiKey}&Query=${query}&_=${Date.now()}`;
         try {
           const response = await axios.get(url);
-          return response.data.Results;
+          return response.data["Results"];
         } catch (error) {
           console.error(`Error fetching results from ${host}:`, error.message);
           return [];
@@ -88,12 +88,12 @@ let fetchTorrent = async (hosts, apiKey, query) => {
 
     if (allResults.length !== 0) {
       return allResults.map((result) => ({
-        Tracker: result.Tracker,
-        Category: result.CategoryDesc,
-        Title: result.Title,
-        Seeders: result.Seeders,
-        Peers: result.Peers,
-        Link: result.Link,
+        Tracker: result["Tracker"],
+        Category: result["CategoryDesc"],
+        Title: result["Title"],
+        Seeders: result["Seeders"],
+        Peers: result["Peers"],
+        Link: result["Link"],
       }));
     } else {
       return [];
@@ -125,7 +125,42 @@ const getMeta = async (id, type) => {
   }
 };
 
-const addon = new addonBuilder({
+const app = express();
+app.use(cors());
+
+app.get("/stream/:id.json", async (req, res) => {
+  const { id } = req.params;
+  const [tt, s, e] = id.split(":");
+  const type = tt === "tt" ? type_.MOVIE : type_.TV;
+  const query = tt === "tt" ? `movie:${id}` : `series:${tt}`;
+
+  const tor = (await fetchTorrent(hosts, apiKey, query)).find(
+    (element) => element["Title"].toLowerCase() === id
+  );
+  if (!tor) {
+    console.error(`No torrent found for the ID: ${id}`);
+    res.status(404).json({ error: "Torrent not found" });
+    return;
+  }
+
+  const meta = await getMeta(id, type);
+  if (!meta.name) {
+    console.error(`No meta data found for the ID: ${id}`);
+    res.status(404).json({ error: "Meta data not found" });
+    return;
+  }
+
+  const stream = await streamFromMagnet(tor, tor.Link, type, s, e);
+  if (!stream) {
+    console.error(`Failed to create stream for the ID: ${id}`);
+    res.status(500).json({ error: "Failed to create stream" });
+    return;
+  }
+
+  res.json(stream);
+});
+
+const manifest = {
   id: "org.example.jackettaddon",
   version: "1.0.0",
   name: "Jackett Addon",
@@ -137,42 +172,14 @@ const addon = new addonBuilder({
   logo: "https://path.to/your/logo.png", // Replace with the URL of your addon logo
   background: "https://path.to/your/background.png", // Replace with the URL of your addon background image
   endpoint: "http://localhost:3000", // Replace with the public URL of your server
-});
+};
 
-addon.defineStreamHandler(async (args) => {
-  const { id } = args;
-  const [tt, s, e] = id.split(":");
-  const type = tt === "tt" ? type_.MOVIE : type_.TV;
-  const query = tt === "tt" ? `movie:${id}` : `series:${tt}`;
+const builder = new addonBuilder(manifest);
+const addonInterface = builder.getInterface();
 
-  const tor = (await fetchTorrent(hosts, apiKey, query)).find(
-    (element) => element.Title.toLowerCase() === id
-  );
-  if (!tor) {
-    console.error(`No torrent found for the ID: ${id}`);
-    return { streams: [] };
-  }
-
-  const meta = await getMeta(id, type);
-  if (!meta.name) {
-    console.error(`No meta data found for the ID: ${id}`);
-    return { streams: [] };
-  }
-
-  const stream = await streamFromMagnet(tor, tor.Link, type, s, e);
-  if (!stream) {
-    console.error(`Failed to create stream for the ID: ${id}`);
-    return { streams: [] };
-  }
-
-  return { streams: [stream] };
-});
-
-const app = express();
-app.use(cors());
+app.use(addonInterface.middleware());
 
 const port = process.env.PORT || 3000;
-app.use(serveHTTP(addon.getInterface()));
 app.listen(port, () => {
   console.log(`Addon server listening on port ${port}`);
 });
