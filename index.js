@@ -1,5 +1,4 @@
-const { addonBuilder, getInterface } = require("stremio-addon-sdk");
-const express = require("express");
+const { addonBuilder, serveHTTP, getInterface } = require("stremio-addon-sdk");
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
@@ -21,8 +20,7 @@ const toStream = (parsed, tor, type, s, e) => {
         (element["name"]?.toLowerCase()?.includes(`.mkv`) ||
           element["name"]?.toLowerCase()?.includes(`.mp4`) ||
           element["name"]?.toLowerCase()?.includes(`.avi`) ||
-          element["name"]?.toLowerCase()?.includes(`.flv`)
-        )
+          element["name"]?.toLowerCase()?.includes(`.flv`))
       );
     });
 
@@ -126,7 +124,8 @@ const getMeta = async (id, type) => {
   }
 };
 
-const app = express();
+const app = require("express")();
+
 app.use(cors()); // Enable CORS for all routes
 
 app.get("/manifest.json", (req, res) => {
@@ -135,8 +134,7 @@ app.get("/manifest.json", (req, res) => {
     version: "3.0.0",
     name: "Hackett",
     description: "Torrent results from Jackett Indexers",
-    icon:
-      "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
+    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
     resources: ["stream"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
@@ -146,39 +144,34 @@ app.get("/manifest.json", (req, res) => {
   return res.send(manifest);
 });
 
-app.get("/stream/:type/:id", async (req, res) => {
-  const media = req.params.type;
-  let id = req.params.id.replace(".json", "");
-  let [tt, s, e] = id.split(":");
-  let query = "";
-  let meta;
-
-  try {
-    meta = await getMeta(id, media);
-  } catch (error) {
-    console.error("Error fetching meta data:", error.message);
-  }
-
-  query = meta?.name;
-
-  if (media === type_.MOVIE) {
-    query += " " + meta?.year;
-  } else if (media === type_.TV) {
-    query += " S" + (s ?? "1").padStart(2, "0");
-  }
-  query = encodeURIComponent(query);
-
-  let result = await fetchTorrent(hosts, apiKey, query);
-
-  let stream_results = await Promise.all(
-    result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
+app.get("/stream/:type/:id.json", async (req, res) => {
+  const { type, id } = req.params;
+  const [tt, s, e] = id.split(":");
+  const query = s ? `${tt} s${s} e${e}` : tt;
+  const results = await fetchTorrent(hosts, apiKey, query);
+  const streams = await Promise.all(
+    results.map(async (result) => streamFromMagnet(result, result["Link"], type, s, e))
   );
 
+  const meta = await getMeta(id, type);
+
+  const metas = streams.map((stream) => ({
+    id: `${tt}:${stream.type === "series" ? s + ":" + e : ""}${stream.infoHash.toUpperCase()}`,
+    name: stream.title,
+    type: stream.type,
+    infoHash: stream.infoHash,
+    season: stream.type === "series" ? parseInt(s) : null,
+    episode: stream.type === "series" ? parseInt(e) : null,
+    title: meta.name,
+    year: meta.year,
+    poster: `https://m.media-amazon.com/images/M/${tt}.jpg`,
+    background: `https://m.media-amazon.com/images/M/${tt}.jpg`,
+  }));
+
   res.setHeader("Content-Type", "application/json");
-  return res.send({ streams: stream_results });
+  return res.send({ metas });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("The server is working on " + PORT);
-});
+const builder = new addonBuilder(getInterface(app));
+const addonInterface = builder.getInterface();
+serveHTTP(addonInterface, { port: process.env.PORT || 3000 });
