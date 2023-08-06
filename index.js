@@ -47,11 +47,53 @@ const toStream = (parsed, tor, type, s, e) => {
 
 const streamFromMagnet = (tor, uri, type, s, e) => {
   return new Promise((resolve, reject) => {
-    if (uri && uri.startsWith("magnet:?")) { // Add a check for uri to avoid errors
-      resolve(toStream(parseTorrent(uri), tor, type, s, e));
-    } else {
-      resolve(false); // Handle the case when uri is null or not starting with "magnet:?"
+    if (!uri || !uri.startsWith("magnet:?")) {
+      console.log("Invalid or missing magnet URI:", uri);
+      resolve(false);
+      return;
     }
+
+    parseTorrent.remote(uri, (err, parsed) => {
+      if (err) {
+        console.error("Error parsing magnet URI:", err);
+        resolve(false);
+        return;
+      }
+
+      const infoHash = parsed.infoHash.toLowerCase();
+      let title = tor.extraTag || parsed.name;
+      let index = -1;
+      if (type === "TV") {
+        index = (parsed.files || []).findIndex((element) => {
+          return (
+            element.name?.toLowerCase().includes(`s0${s}`) &&
+            element.name?.toLowerCase().includes(`e0${e}`) &&
+            (element.name?.toLowerCase().includes(".mkv") ||
+              element.name?.toLowerCase().includes(".mp4") ||
+              element.name?.toLowerCase().includes(".avi") ||
+              element.name?.toLowerCase().includes(".flv"))
+          );
+        });
+
+        title += index === -1 ? "" : `\n${parsed.files[index].name}`;
+      }
+
+      const subtitle = "Seeds: " + tor.Seeders + " / Peers: " + tor.Peers;
+      title += (title.indexOf("\n") > -1 ? "\r\n" : "\r\n\r\n") + subtitle;
+
+      const stream = {
+        name: tor.Tracker,
+        type: type,
+        infoHash: infoHash,
+        fileIdx: index === -1 ? 1 : index,
+        sources: (parsed.announce || []).map((x) => {
+          return "tracker:" + x;
+        }),
+        title: title,
+      };
+
+      resolve(stream);
+    });
   });
 };
 
