@@ -1,4 +1,6 @@
-const { addonBuilder, serveHTTP, getInterface } = require("stremio-addon-sdk");
+const { addonBuilder, getInterface } = require("stremio-addon-sdk");
+const express = require("express");
+const app = express();
 const axios = require("axios");
 const parseTorrent = require("parse-torrent");
 const cors = require("cors");
@@ -124,54 +126,60 @@ const getMeta = async (id, type) => {
   }
 };
 
-const app = require("express")();
-
 app.use(cors()); // Enable CORS for all routes
 
-app.get("/manifest.json", (req, res) => {
-  const manifest = {
-    id: "mikmc.od.org+++",
-    version: "3.0.0",
-    name: "Hackett",
-    description: "Torrent results from Jackett Indexers",
-    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
-    resources: ["stream"],
-    types: ["movie", "series"],
-    idPrefixes: ["tt"],
-    catalogs: [],
-  };
-  res.setHeader("Content-Type", "application/json");
-  return res.send(manifest);
-});
-
-app.get("/stream/:type/:id.json", async (req, res) => {
-  const { type, id } = req.params;
+app.get("/stream/:id.json", async (req, res) => {
+  const { id } = req.params;
   const [tt, s, e] = id.split(":");
-  const query = s ? `${tt} s${s} e${e}` : tt;
-  const results = await fetchTorrent(hosts, apiKey, query);
-  const streams = await Promise.all(
-    results.map(async (result) => streamFromMagnet(result, result["Link"], type, s, e))
+  const type = tt === "tt" ? type_.MOVIE : type_.TV;
+  const query = tt === "tt" ? `movie:${id}` : `series:${tt}`;
+
+  const tor = (await fetchTorrent(hosts, apiKey, query)).find(
+    (element) => element["Title"].toLowerCase() === id
   );
+  if (!tor) {
+    console.error(`No torrent found for the ID: ${id}`);
+    res.status(404).json({ error: "Torrent not found" });
+    return;
+  }
 
   const meta = await getMeta(id, type);
+  if (!meta.name) {
+    console.error(`No meta data found for the ID: ${id}`);
+    res.status(404).json({ error: "Meta data not found" });
+    return;
+  }
 
-  const metas = streams.map((stream) => ({
-    id: `${tt}:${stream.type === "series" ? s + ":" + e : ""}${stream.infoHash.toUpperCase()}`,
-    name: stream.title,
-    type: stream.type,
-    infoHash: stream.infoHash,
-    season: stream.type === "series" ? parseInt(s) : null,
-    episode: stream.type === "series" ? parseInt(e) : null,
-    title: meta.name,
-    year: meta.year,
-    poster: `https://m.media-amazon.com/images/M/${tt}.jpg`,
-    background: `https://m.media-amazon.com/images/M/${tt}.jpg`,
-  }));
+  const stream = await streamFromMagnet(tor, tor.Link, type, s, e);
+  if (!stream) {
+    console.error(`Failed to create stream for the ID: ${id}`);
+    res.status(500).json({ error: "Failed to create stream" });
+    return;
+  }
 
-  res.setHeader("Content-Type", "application/json");
-  return res.send({ metas });
+  res.json(stream);
 });
 
-const builder = new addonBuilder(getInterface(app));
-const addonInterface = builder.getInterface();
-serveHTTP(addonInterface, { port: process.env.PORT || 3000 });
+const manifest = {
+  id: "org.example.jackettaddon",
+  version: "1.0.0",
+  name: "Jackett Addon",
+  description: "Stremio addon for Jackett",
+  resources: ["stream"],
+  types: ["movie", "series"],
+  catalogs: [],
+  idPrefixes: ["tt", "e"],
+  logo: "https://path.to/your/logo.png", // Replace with the URL of your addon logo
+  background: "https://path.to/your/background.png", // Replace with the URL of your addon background image
+  endpoint: "http://localhost:3000", // Replace with the public URL of your server
+};
+
+const builder = new addonBuilder(manifest);
+const addonInterface = getInterface(builder);
+
+app.use(addonInterface.middleware());
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Addon server listening on port ${port}`);
+});
