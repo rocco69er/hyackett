@@ -15,7 +15,7 @@ const toStream = (parsed, tor, type, s, e) => {
   let title = tor.extraTag || parsed.name;
   let index = -1;
   if (type === type_.TV) {
-    index = (parsed.files ?? []).findIndex((element) => {
+    index = (parsed.files ?? []).findIndex((element, index) => {
       return (
         element["name"]?.toLowerCase()?.includes(`s0${s}`) &&
         element["name"]?.toLowerCase()?.includes(`e0${e}`) &&
@@ -27,7 +27,7 @@ const toStream = (parsed, tor, type, s, e) => {
       );
     });
 
-    title += index === -1 ? "" : `\n${parsed.files[index]["name"]}`;
+    title += index == -1 ? "" : `\n${parsed.files[index]["name"]}`;
   }
 
   const subtitle = "Seeds: " + tor["Seeders"] + " / Peers: " + tor["Peers"];
@@ -37,9 +37,10 @@ const toStream = (parsed, tor, type, s, e) => {
     name: tor["Tracker"],
     type: type,
     infoHash: infoHash,
-    fileIdx: index === -1 ? 1 : index,
+    fileIdx: index == -1 ? 1 : index,
     sources: (parsed.announce || []).map((x) => "tracker:" + x).concat(["dht:" + infoHash]),
     title: title,
+    timestamp: tor.timestamp, // Assuming there's a property "timestamp" in the torrent object
   };
 };
 
@@ -96,6 +97,7 @@ let fetchTorrent = async (hosts, apiKey, query) => {
         Seeders: result["Seeders"],
         Peers: result["Peers"],
         Link: result["Link"],
+        timestamp: result.timestamp, // Assuming there's a property "timestamp" in the result object
       }));
     } else {
       return [];
@@ -135,8 +137,7 @@ app.get("/manifest.json", (req, res) => {
     version: "3.0.0",
     name: "Hackett",
     description: "Torrent results from Jackett Indexers",
-    icon:
-      "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
+    icon: "https://raw.githubusercontent.com/mikmc55/stremio-jackett/main/hy.jpg",
     resources: ["stream"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
@@ -175,8 +176,12 @@ app.get("/stream/:type/:id", async (req, res) => {
     result.map((torrent) => streamFromMagnet(torrent, torrent["Link"], media, s, e))
   );
 
-  // Filter out unsuccessful stream results
+  // Filter out unsuccessful stream results and sort by date (newest first)
   stream_results = stream_results.filter((stream) => stream !== false);
+  stream_results.sort((a, b) => b.timestamp - a.timestamp);
+
+  // Limit the number of results to 10
+  stream_results = stream_results.slice(0, 10);
 
   if (stream_results.length === 0) {
     return res.status(500).json({ error: "No torrent data found." });
