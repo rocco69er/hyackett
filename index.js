@@ -66,8 +66,8 @@ const streamFromMagnet = async (tor, uri, type, s, e) => {
   }
 };
 
-let hosts = ["http://100.40.225.234:9117"]; // Replace host:port with your actual Jackett API endpoint
-let apiKey = "fql6lmpnr2xnw2om8s7arfcmkpd2jinw"; // Replace with your Jackett API key
+let hosts = ["http://104.254.43.51:9117"]; // Replace host:port with your actual Jackett API endpoint
+let apiKey = "sttm651zbu0s3mabuwjhary5aax4gke4"; // Replace with your Jackett API key
 
 let fetchTorrent = async (hosts, apiKey, query) => {
   try {
