@@ -259,8 +259,13 @@ app.get("/stream/:type/:id", async (req, res) => {
   console.log({ meta });
   query = meta?.name;
 
+  if (!query) {
+    console.error("No query found for the given ID.");
+    return res.status(404).send({ streams: [] });
+  }
+
   if (media === "movie") {
-    query += " " + meta?.year;
+    query += " " + (meta?.year || ""); // Ensure that the year is appended if available
   } else if (media === "series") {
     query += " S" + (s ?? "1").padStart(2, "0");
   }
@@ -287,7 +292,6 @@ app.get("/stream/:type/:id", async (req, res) => {
 
   stream_results = Array.from(new Set(stream_results)).filter((e) => !!e);
 
-  // console.log(stream_results)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
   res.setHeader("Content-Type", "application/json");
