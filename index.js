@@ -1,4 +1,3 @@
-require("dotenv").config();
 const parseTorrent = require("parse-torrent");
 const express = require("express");
 const app = express();
@@ -28,12 +27,12 @@ function getQuality(name) {
 }
 
 const toStream = async (parsed, uri, tor, type, s, e) => {
-  const infoHash = parsed.infoHash?.toLowerCase();
-  if (!infoHash) {
-    console.error("InfoHash is missing.");
+  if (!parsed || !parsed.infoHash) {
+    console.error("Invalid torrent data.");
     return null;
   }
 
+  const infoHash = parsed.infoHash.toLowerCase();
   let title = tor.extraTag || parsed.name;
   let index = 0;
 
@@ -55,6 +54,7 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
     } catch (error) {
       // Handle any errors here
       console.error("Error fetching torrent data:", error);
+      return null;
     }
   }
 
@@ -81,7 +81,7 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
   title += ` | ${
     index === -1
       ? `${getSize(parsed.length || 0)}`
-      : `${getSize(parsed.files[index]?.length || 0)}`
+      : `${getSize(parsed.files[index]["length"] || 0)}`
   } | ${subtitle} `;
 
   return {
@@ -179,42 +179,45 @@ const apiKey = "h3cotr040alw3lqbuhjgrorcal76bv17";
 let fetchTorrent = async (query) => {
   let url = `${host}/api/v2.0/indexers/all/results?apikey=${apiKey}&Query=${query}&Category%5B%5D=2000&Category%5B%5D=5000&Tracker%5B%5D=bitsearch&Tracker%5B%5D=nyaasi&Tracker%5B%5D=solidtorrents`;
 
-  return await fetch(url, {
-    headers: {
-      accept: "*/*",
-      "accept-language": "en-US,en;q=0.9",
-      "x-requested-with": "XMLHttpRequest",
-      cookie:
-        "Jackett=CfDJ8AG_XUDhxS5AsRKz0FldsDJIHUJANrfynyi54VzmYuhr5Ha5Uaww2hSQytMR8fFWjPvDH2lKCzaQhRYI9RuK613PZxJWz2tgHqg1wUAcPTMfi8b_8rm1Igw1-sZB_MnimHHK7ZSP7HfkWicMDaJ4bFGZwUf0xJOwcgjrwcUcFzzsVSTALt97-ibhc7PUn97v5AICX2_jsd6khO8TZosaPFt0cXNgNofimAkr5l6yMUjShg7R3TpVtJ1KxD8_0_OyBjR1mwtcxofJam2aZeFqVRxluD5hnzdyxOWrMRLSGzMPMKiaPXNCsxWy_yQhZhE66U_bVFadrsEeQqqaWb3LIFA",
-    },
-    referrerPolicy: "no-referrer",
-    // body: null,
-    method: "GET",
-  })
-    .then((res) => res.json())
-    .then(async (results) => {
-      console.log({ Initial: results["Results"].length });
-      if (results["Results"].length != 0) {
-        torrent_results = await Promise.all(
-          results["Results"].map((result) => {
-            return new Promise((resolve, reject) => {
-              resolve({
-                Tracker: result["Tracker"],
-                Category: result["CategoryDesc"],
-                Title: result["Title"],
-                Seeders: result["Seeders"],
-                Peers: result["Peers"],
-                Link: result["Link"],
-                MagnetUri: result["MagnetUri"],
-              });
-            });
-          })
-        );
-        return torrent_results;
-      } else {
-        return [];
-      }
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "x-requested-with": "XMLHttpRequest",
+        cookie:
+          "Jackett=CfDJ8AG_XUDhxS5AsRKz0FldsDJIHUJANrfynyi54VzmYuhr5Ha5Uaww2hSQytMR8fFWjPvDH2lKCzaQhRYI9RuK613PZxJWz2tgHqg1wUAcPTMfi8b_8rm1Igw1-sZB_MnimHHK7ZSP7HfkWicMDaJ4bFGZwUf0xJOwcgjrwcUcFzzsVSTALt97-ibhc7PUn97v5AICX2_jsd6khO8TZosaPFt0cXNgNofimAkr5l6yMUjShg7R3TpVtJ1KxD8_0_OyBjR1mwtcxofJam2aZeFqVRxluD5hnzdyxOWrMRLSGzMPMKiaPXNCsxWy_yQhZhE66U_bVFadrsEeQqqaWb3LIFA",
+      },
+      referrerPolicy: "no-referrer",
+      method: "GET",
     });
+
+    if (!response.ok) {
+      console.error("Error fetching torrents. Status:", response.status);
+      return [];
+    }
+
+    const results = await response.json();
+    console.log({ Initial: results["Results"].length });
+
+    if (results["Results"].length !== 0) {
+      return results["Results"].map((result) => ({
+        Tracker: result["Tracker"],
+        Category: result["CategoryDesc"],
+        Title: result["Title"],
+        Seeders: result["Seeders"],
+        Peers: result["Peers"],
+        Link: result["Link"],
+        MagnetUri: result["MagnetUri"],
+      }));
+    } else {
+      return [];
+    }
+  } catch (error) {
+    // Handle any errors here
+    console.error("Error fetching torrents:", error);
+    return [];
+  }
 };
 
 function getMeta(id, type) {
@@ -263,13 +266,8 @@ app.get("/stream/:type/:id", async (req, res) => {
   console.log({ meta });
   query = meta?.name;
 
-  if (!query) {
-    console.error("No query found for the given ID.");
-    return res.status(404).send({ streams: [] });
-  }
-
   if (media === "movie") {
-    query += " " + (meta?.year || ""); // Ensure that the year is appended if available
+    query += " " + meta?.year;
   } else if (media === "series") {
     query += " S" + (s ?? "1").padStart(2, "0");
   }
@@ -296,6 +294,7 @@ app.get("/stream/:type/:id", async (req, res) => {
 
   stream_results = Array.from(new Set(stream_results)).filter((e) => !!e);
 
+  // console.log(stream_results)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
   res.setHeader("Content-Type", "application/json");
