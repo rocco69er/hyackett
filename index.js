@@ -38,15 +38,16 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
       const res = await new Promise((resolve, reject) => {
         engine.on("ready", function () {
           resolve(engine.files);
+          engine.destroy(); // Close the torrent stream after fetching data
         });
 
         setTimeout(() => {
+          engine.destroy(); // Close the torrent stream if the server is too slow
           resolve([]);
         }, 10000); // Timeout if the server is too slow
       });
 
       parsed.files = res;
-      engine.destroy();
     } catch (error) {
       // Handle any errors here
       console.error("Error fetching torrent data:", error);
