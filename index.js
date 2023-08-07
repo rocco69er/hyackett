@@ -231,7 +231,7 @@ app
       version: "3.0.0",
       name: "JACKETT",
       description: "Movie & TV Streams from Jackett",
-      logo: "https://raw.githubusercontent.com/daniwalter001/daniwalter001/main/52852137.png",
+      logo: "https://raw.githubusercontent.com/mikmc55/hyackett/main/hyjackett.jpg",
       resources: ["stream"],
       types: ["movie", "series"],
       idPrefixes: ["tt"],
