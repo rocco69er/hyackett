@@ -27,11 +27,6 @@ function getQuality(name) {
 }
 
 const toStream = async (parsed, uri, tor, type, s, e) => {
-  if (!parsed || !parsed.infoHash) {
-    console.error("Invalid torrent data.");
-    return null;
-  }
-
   const infoHash = parsed.infoHash.toLowerCase();
   let title = tor.extraTag || parsed.name;
   let index = 0;
@@ -54,7 +49,6 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
     } catch (error) {
       // Handle any errors here
       console.error("Error fetching torrent data:", error);
-      return null;
     }
   }
 
@@ -81,7 +75,7 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
   title += ` | ${
     index === -1
       ? `${getSize(parsed.length || 0)}`
-      : `${getSize(parsed.files[index]["length"] || 0)}`
+      : `${getSize((parsed.files && parsed.files[index]?.length) || 0)}`
   } | ${subtitle} `;
 
   return {
