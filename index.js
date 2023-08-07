@@ -28,7 +28,12 @@ function getQuality(name) {
 }
 
 const toStream = async (parsed, uri, tor, type, s, e) => {
-  const infoHash = parsed.infoHash.toLowerCase();
+  const infoHash = parsed.infoHash?.toLowerCase();
+  if (!infoHash) {
+    console.error("InfoHash is missing.");
+    return null;
+  }
+
   let title = tor.extraTag || parsed.name;
   let index = 0;
 
@@ -38,16 +43,15 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
       const res = await new Promise((resolve, reject) => {
         engine.on("ready", function () {
           resolve(engine.files);
-          engine.destroy(); // Close the torrent stream after fetching data
         });
 
         setTimeout(() => {
-          engine.destroy(); // Close the torrent stream if the server is too slow
           resolve([]);
         }, 10000); // Timeout if the server is too slow
       });
 
       parsed.files = res;
+      engine.destroy();
     } catch (error) {
       // Handle any errors here
       console.error("Error fetching torrent data:", error);
@@ -77,7 +81,7 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
   title += ` | ${
     index === -1
       ? `${getSize(parsed.length || 0)}`
-      : `${getSize(parsed.files[index]["length"] || 0)}`
+      : `${getSize(parsed.files[index]?.length || 0)}`
   } | ${subtitle} `;
 
   return {
