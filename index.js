@@ -33,7 +33,10 @@ const toStream = async (parsed, uri, tor, type, s, e) => {
 
   if (!parsed.files && uri.startsWith("magnet")) {
     try {
-      const engine = torrentStream("magnet:" + uri);
+      const engine = torrentStream("magnet:" + uri, {
+        connections: 10, // Limit the number of connections/streams
+      });
+
       const res = await new Promise((resolve, reject) => {
         engine.on("ready", function () {
           resolve(engine.files);
@@ -288,7 +291,6 @@ app.get("/stream/:type/:id", async (req, res) => {
 
   stream_results = Array.from(new Set(stream_results)).filter((e) => !!e);
 
-  // console.log(stream_results)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
   res.setHeader("Content-Type", "application/json");
